@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
 import { ensureSchema, pool } from "@/lib/server-db";
-import { parseRemaxAgentCards } from "@/lib/remax-import";
+import { parseRemaxAgentCards, parseRemaxSitemap, parseSitemapLocations } from "@/lib/remax-import";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -28,6 +28,91 @@ export async function POST() {
     let selectedDirectory = "";
     const seenOnRun = new Set<string>();
     const diagnostics: string[] = [];
+
+    // Prefer the site's public XML sitemap: profile URLs may not be present in
+    // the server-rendered directory HTML when the listing is hydrated by JS.
+    const sitemapQueue: string[] = [
+      "https://www.remax.mn/sitemap.xml",
+      "https://www.remax.mn/sitemap_index.xml",
+      "https://www.remax.mn/sitemap-index.xml"
+    ];
+    try {
+      const robots = await fetch("https://www.remax.mn/robots.txt", {
+        headers, signal: AbortSignal.timeout(12000), cache: "no-store", redirect: "follow"
+      });
+      if (robots.ok) {
+        const robotsText = await robots.text();
+        for (const line of robotsText.match(/^\\s*sitemap:\\s*(https?:\\/\\/\\S+)/gim) || []) {
+          const value = line.replace(/^\\s*sitemap:\\s*/i, "").trim();
+          if (value.startsWith("https://www.remax.mn/") || value.startsWith("https://remax.mn/")) {
+            sitemapQueue.unshift(value);
+          }
+        }
+      }
+    } catch {
+      diagnostics.push("robots.txt: unavailable; trying standard sitemap paths");
+    }
+
+    const visitedSitemaps = new Set<string>();
+    const sitemapCards = new Map<string, { fullName: string; profileUrl: string }>();
+    while (sitemapQueue.length && visitedSitemaps.size < 15 && sitemapCards.size < 5000) {
+      const sitemapUrl = sitemapQueue.shift()!;
+      if (visitedSitemaps.has(sitemapUrl)) continue;
+      visitedSitemaps.add(sitemapUrl);
+      try {
+        const response = await fetch(sitemapUrl, {
+          headers: { ...headers, "Accept": "application/xml,text/xml,text/plain,*/*" },
+          signal: AbortSignal.timeout(15000),
+          cache: "no-store",
+          redirect: "follow"
+        });
+        pagesScanned++;
+        if (!response.ok) {
+          diagnostics.push(`sitemap ${new URL(sitemapUrl).pathname}: HTTP ${response.status}`);
+          continue;
+        }
+        const xml = await response.text();
+        if (xml.length > 8_000_000) {
+          diagnostics.push(`sitemap ${new URL(sitemapUrl).pathname}: response too large`);
+          continue;
+        }
+        for (const agent of parseRemaxSitemap(xml)) sitemapCards.set(agent.profileUrl, agent);
+        if (sitemapCards.size === 0) {
+          for (const location of parseSitemapLocations(xml)) {
+            if (/sitemap[^/]*\\.xml(?:$|\\?)/i.test(location) && !visitedSitemaps.has(location)) {
+              sitemapQueue.push(location);
+            }
+          }
+        }
+      } catch (error) {
+        diagnostics.push(`sitemap ${new URL(sitemapUrl).pathname}: ${error instanceof Error ? error.message : "fetch failed"}`);
+      }
+      await sleep(250);
+    }
+
+    for (const agent of sitemapCards.values()) {
+      const result = await pool.query(
+        `insert into agents(full_name, profile_url, source_url, source_checked_at)
+         values($1,$2,$2,now())
+         on conflict(profile_url) do update set
+           full_name=excluded.full_name, source_url=excluded.source_url, source_checked_at=now()
+         returning (xmax = 0) as inserted`,
+        [agent.fullName, agent.profileUrl]
+      );
+      if (result.rows[0]?.inserted) imported++; else updated++;
+      seenOnRun.add(agent.profileUrl);
+    }
+    if (seenOnRun.size > 0) {
+      return NextResponse.json({
+        success: true,
+        imported,
+        updated,
+        totalFound: seenOnRun.size,
+        pagesScanned,
+        directory: "https://www.remax.mn/sitemap.xml (public sitemap discovery)",
+        note: "Зөвхөн нийтэд нээлттэй агентын нэр, профайлын холбоос импортолсон. Утас, имэйл болон маркетингийн зөвшөөрөл цуглуулаагүй."
+      });
+    }
 
     for (const directory of DIRECTORIES) {
       let sourceFound = 0;
