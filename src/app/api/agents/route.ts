@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { isAuthenticated } from "@/lib/auth";
 import { ensureSchema,pool } from "@/lib/server-db";
+import { normalizeMongolianPhone } from "@/lib/phone";
 export const runtime="nodejs";
 export async function GET(request:Request){
  if(!await isAuthenticated())return NextResponse.json({error:"Нэвтэрнэ үү."},{status:401});
@@ -13,7 +14,7 @@ export async function POST(req:Request){
  if(typeof b.fullName!=="string"||!b.fullName.trim()||typeof b.sourceUrl!=="string"||!/^https:\/\//i.test(b.sourceUrl))return NextResponse.json({error:"Нэр болон эх сурвалжийн https холбоос шаардлагатай."},{status:400});
  if(b.consents?.telegram===true)return NextResponse.json({error:"Telegram зөвшөөрлийг хэрэглэгч ботод өөрөө баталгаажуулах ёстой. Урилгын холбоос үүсгэнэ."},{status:400});
  if(b.consents?.sms===true&&(!b.evidence||typeof b.evidence!=="string"||!b.evidence.trim()))return NextResponse.json({error:"SMS зөвшөөрлийн нотолгоо шаардлагатай."},{status:400});
- const digits=typeof b.phone==="string"?b.phone.replace(/\D/g,""):"";const phone=digits?(digits.startsWith("976")?"+":" +976").replace(" ","")+(digits.startsWith("976")?digits.slice(3):digits):null;
+ const phone=typeof b.phone==="string"&&b.phone.trim()?normalizeMongolianPhone(b.phone):null;
  if(phone&&!/^\+976\d{8}$/.test(phone))return NextResponse.json({error:"Монгол утасны дугаар 8 оронтой байх ёстой."},{status:400});
  try{await ensureSchema();const linkToken=randomUUID(),optOutToken=randomUUID();const r=await pool.query("insert into agents(full_name,office_name,phone_e164,email,profile_url,source_url,telegram_link_token,opt_out_token) values($1,$2,$3,$4,$5,$6,$7,$8) returning id",[b.fullName.trim(),b.office||null,phone,b.email||null,b.profileUrl||null,b.sourceUrl,linkToken,optOutToken]);const id=r.rows[0].id;
  if(b.consents?.sms===true)await pool.query("insert into consents(agent_id,channel,purpose,source,evidence_ref) values($1,'sms','RAINY FB Pro мэдээлэл хүргэх зөвшөөрөл','Админ бүртгэл',$2)",[id,b.evidence.trim()]);
