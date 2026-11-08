@@ -18,8 +18,7 @@ const headers = {
   "Accept": "text/html,application/xhtml+xml"
 };
 
-export async function POST() {
-  if (!await isAuthenticated()) return NextResponse.json({ error: "Нэвтэрнэ үү." }, { status: 401 });
+async function runRemaxImport() {
   try {
     await ensureSchema();
     let imported = 0;
@@ -192,4 +191,22 @@ export async function POST() {
     const message = error instanceof Error ? error.message : "RE/MAX импорт амжилтгүй.";
     return NextResponse.json({ success: false, error: message }, { status: 502 });
   }
+}
+
+
+export async function POST() {
+  if (!await isAuthenticated()) {
+    return NextResponse.json({ error: "Нэвтэрнэ үү." }, { status: 401 });
+  }
+  return runRemaxImport();
+}
+
+// One-time operational trigger; disable by clearing REMAX_SYNC_TRIGGER_TOKEN.
+export async function GET(request: Request) {
+  const expected = process.env.REMAX_SYNC_TRIGGER_TOKEN || "";
+  const supplied = new URL(request.url).searchParams.get("token") || "";
+  if (!expected || supplied.length !== expected.length || supplied !== expected) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  return runRemaxImport();
 }
