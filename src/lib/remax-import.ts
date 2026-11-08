@@ -24,6 +24,7 @@ function normalizeProfile(href: string): { profileUrl: string; path: string } | 
     const valid = /^\/agent\/\d{6,}\/?$/i.test(path)
       || /^\/[a-z]{2}(?:-[a-z]{2})?\/(?:agents|агентууд)\/.+\/\d{6,}\/?$/i.test(path)
       || /^\/\d{6,}-\d{1,6}\/?$/.test(path)
+      || /^\/[a-z0-9][a-z0-9-]{1,}\/\d{6,}\/?$/i.test(path)
       || legacyAspx;
     if (!valid) return null;
     if (legacyAspx) path = "/agent/" + queryId;
@@ -55,4 +56,33 @@ export function parseRemaxAgentCards(html: string): RemaxAgentCard[] {
     found.set(profile.profileUrl, { fullName, profileUrl: profile.profileUrl });
   }
   return [...found.values()];
+}
+
+
+/** Extract public agent profile links from XML sitemap/urlset documents. */
+export function parseRemaxSitemap(xml: string): RemaxAgentCard[] {
+  const found = new Map<string, RemaxAgentCard>();
+  for (const match of xml.matchAll(/<loc\\b[^>]*>([\\s\\S]*?)<\\/loc>/gi)) {
+    const href = decodeHtml(match[1]).trim();
+    const profile = normalizeProfile(href);
+    if (!profile) continue;
+    const fullName = nameFromProfilePath(profile.path);
+    if (!fullName || fullName.length > 120) continue;
+    found.set(profile.profileUrl, { fullName, profileUrl: profile.profileUrl });
+  }
+  return [...found.values()];
+}
+
+/** Read sitemap index locations so the importer can follow nested public sitemaps. */
+export function parseSitemapLocations(xml: string): string[] {
+  return [...xml.matchAll(/<loc\\b[^>]*>([\\s\\S]*?)<\\/loc>/gi)]
+    .map(match => decodeHtml(match[1]).trim())
+    .filter(value => {
+      try {
+        const url = new URL(value);
+        return url.protocol === "https:" && ["www.remax.mn", "remax.mn"].includes(url.hostname);
+      } catch {
+        return false;
+      }
+    });
 }
