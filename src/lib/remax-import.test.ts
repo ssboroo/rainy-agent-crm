@@ -9,6 +9,13 @@ describe("parseRemaxAgentCards", () => {
       { fullName: "Telmen Delgerbayar", profileUrl: "https://www.remax.mn/agent/119078060" }
     ]);
   });
+  it("recognizes current Mongolian slug and legacy numeric profile URLs", () => {
+    const html = '<a href="/mn-mn/агентууд/монгол/хан-уул/gereltsetseg-bold/119082050">Gereltsetseg Bold</a><a href="/119002099-106">Agent Name</a>';
+    expect(parseRemaxAgentCards(html)).toEqual([
+      { fullName: "Gereltsetseg Bold", profileUrl: "https://www.remax.mn/mn-mn/агентууд/монгол/хан-уул/gereltsetseg-bold/119082050" },
+      { fullName: "Agent Name", profileUrl: "https://www.remax.mn/119002099-106" }
+    ]);
+  });
   it("ignores empty, non-agent and malformed anchors", () => {
     expect(parseRemaxAgentCards('<a href="/agent/123"> </a><a href="/office/123">Office</a><a href="javascript:alert(1)">Agent</a>')).toEqual([]);
   });
