@@ -42,8 +42,8 @@ export async function POST() {
       });
       if (robots.ok) {
         const robotsText = await robots.text();
-        for (const line of robotsText.match(/^\\s*sitemap:\\s*(https?:\\/\\/\\S+)/gim) || []) {
-          const value = line.replace(/^\\s*sitemap:\\s*/i, "").trim();
+        for (const line of robotsText.match(/^\s*sitemap:\s*(https?:\/\/\S+)/gim) || []) {
+          const value = line.replace(/^\s*sitemap:\s*/i, "").trim();
           if (value.startsWith("https://www.remax.mn/") || value.startsWith("https://remax.mn/")) {
             sitemapQueue.unshift(value);
           }
@@ -79,7 +79,7 @@ export async function POST() {
         for (const agent of parseRemaxSitemap(xml)) sitemapCards.set(agent.profileUrl, agent);
         if (sitemapCards.size === 0) {
           for (const location of parseSitemapLocations(xml)) {
-            if (/sitemap[^/]*\\.xml(?:$|\\?)/i.test(location) && !visitedSitemaps.has(location)) {
+            if (/sitemap[^/]*\.xml(?:$|\?)/i.test(location) && !visitedSitemaps.has(location)) {
               sitemapQueue.push(location);
             }
           }
