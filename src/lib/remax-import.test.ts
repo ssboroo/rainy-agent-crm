@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRemaxAgentCards, parseRemaxSitemap } from "./remax-import";
+import { parseRemaxAgentCards, parseRemaxSitemap, parseRemaxPublicPhone } from "./remax-import";
 
 describe("parseRemaxAgentCards", () => {
   it("extracts legacy and localized profile anchors", () => {
@@ -30,5 +30,20 @@ describe("parseRemaxAgentCards", () => {
   });
   it("ignores external, non-agent, malformed and short-id links", () => {
     expect(parseRemaxAgentCards('<a href="https://evil.example/agent/119123456">Agent</a><a href="/office/119123456">Office</a><a href="/agent/123"> </a><a href="javascript:alert(1)">Agent</a>')).toEqual([]);
+  });
+});
+
+describe("parseRemaxPublicPhone", () => {
+  it("extracts a visibly displayed Mongolian number and normalizes it", () => {
+    expect(parseRemaxPublicPhone('<section><span>Утас: 9911 2233</span></section>')).toBe("+97699112233");
+  });
+  it("extracts a public tel link", () => {
+    expect(parseRemaxPublicPhone('<a href="tel:+976-8811-2233">+976 8811 2233</a>')).toBe("+97688112233");
+  });
+  it("does not collect numbers found only in scripts or hidden elements", () => {
+    expect(parseRemaxPublicPhone('<script>window.phone="99112233"</script><div hidden>88112233</div><span>Профайл</span>')).toBeNull();
+  });
+  it("returns null when no public phone number is present", () => {
+    expect(parseRemaxPublicPhone('<main><p>Агентын профайл</p></main>')).toBeNull();
   });
 });
