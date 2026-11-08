@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const DIRECTORIES = [
+  "https://www.remax.mn/ProfileSearch?countryId=119&country=Mongolia&searchType=agent",
   "https://www.remax.mn/en/agents/mongolia",
   "https://www.remax.mn/mn-mn/агентууд/монгол",
   "https://www.remax.mn/ProfileSearch?countryId=119&searchType=agent"
