@@ -3,7 +3,8 @@ import { useCallback,useEffect,useMemo,useState } from "react";
 import { Activity, Users, ShieldCheck, MessageSquare, Send, Search, Plus, LogOut, LayoutDashboard, Megaphone, RefreshCw, LockKeyhole, CircleCheck, AlertCircle, ExternalLink } from "lucide-react";
 
 type Agent={id:string;full_name:string;office_name:string|null;phone_e164:string|null;email:string|null;source_url:string;telegram_chat_id:string|null;sms_consent:boolean;telegram_consent:boolean;created_at:string};
-type Campaign={id:string;name:string;channel:string;message:string;status:string;created_at:string};\ntype MessageLog={id:string;full_name:string|null;campaign_name:string|null;channel:string;status:string;error_text:string|null;created_at:string};
+type Campaign={id:string;name:string;channel:string;message:string;status:string;created_at:string};
+type MessageLog={id:string;full_name:string|null;campaign_name:string|null;channel:string;status:string;error_text:string|null;created_at:string};
 const nav=[["overview","Тойм",LayoutDashboard],["agents","Агентууд",Users],["campaigns","Кампанит ажил",Megaphone],["messages","Илгээлтийн түүх",Activity]] as const;
 export default function Home(){
  const [logged,setLogged]=useState(false),[password,setPassword]=useState(""),[tab,setTab]=useState("overview"),[inviteLink,setInviteLink]=useState(""),[agents,setAgents]=useState<Agent[]>([]),[campaigns,setCampaigns]=useState<Campaign[]>([]),[messages,setMessages]=useState<MessageLog[]>([]),[stats,setStats]=useState({agents:0,consented:0,campaigns:0,telegram:0}),[query,setQuery]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false),[showAgent,setShowAgent]=useState(false),[showCampaign,setShowCampaign]=useState(false);
