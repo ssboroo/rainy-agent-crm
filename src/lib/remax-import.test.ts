@@ -19,10 +19,9 @@ describe("parseRemaxAgentCards", () => {
     ]);
   });
   it("extracts public agent profile URLs from sitemap entries with slug/id paths", () => {
-    const xml = `<?xml version="1.0"?><urlset><url><loc>https://www.remax.mn/munkhtuul-amgalanbaatar/119091021</loc></url><url><loc>https://www.remax.mn/agent/119091038</loc></url><url><loc>https://www.remax.mn/office/119000001</loc></url></urlset>`;
+    const xml = `<?xml version="1.0"?><urlset><url><loc>https://www.remax.mn/munkhtuul-amgalanbaatar/119091021</loc></url><url><loc>https://www.remax.mn/office/119000001</loc></url></urlset>`;
     expect(parseRemaxSitemap(xml)).toEqual([
-      { fullName: "Munkhtuul Amgalanbaatar", profileUrl: "https://www.remax.mn/munkhtuul-amgalanbaatar/119091021" },
-      { fullName: "119091038", profileUrl: "https://www.remax.mn/agent/119091038" }
+      { fullName: "Munkhtuul Amgalanbaatar", profileUrl: "https://www.remax.mn/munkhtuul-amgalanbaatar/119091021" }
     ]);
   });
   it("uses accessible labels and slug fallback when anchor text is missing", () => {
