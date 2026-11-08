@@ -47,3 +47,17 @@ describe("parseRemaxPublicPhone", () => {
     expect(parseRemaxPublicPhone('<main><p>Агентын профайл</p></main>')).toBeNull();
   });
 });
+
+
+describe("selectRemaxBatch", () => {
+  it("limits each sync request and advances the cursor", async () => {
+    const { selectRemaxBatch } = await import("./remax-import");
+    expect(selectRemaxBatch([1, 2, 3, 4, 5], 0, 2)).toEqual({ items: [1, 2], nextOffset: 2, done: false });
+    expect(selectRemaxBatch([1, 2, 3, 4, 5], 2, 2)).toEqual({ items: [3, 4], nextOffset: 4, done: false });
+  });
+  it("resets after the final batch and handles empty lists", async () => {
+    const { selectRemaxBatch } = await import("./remax-import");
+    expect(selectRemaxBatch([1, 2, 3], 2, 2)).toEqual({ items: [3], nextOffset: 0, done: true });
+    expect(selectRemaxBatch([], 0, 2)).toEqual({ items: [], nextOffset: 0, done: true });
+  });
+});
