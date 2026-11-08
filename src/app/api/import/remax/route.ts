@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
 import { ensureSchema, pool } from "@/lib/server-db";
-import { parseRemaxAgentCards, parseRemaxSitemap, parseSitemapLocations, parseRemaxPublicPhone } from "@/lib/remax-import";
+import { parseRemaxAgentCards, parseRemaxSitemap, parseSitemapLocations, parseRemaxPublicPhone, selectRemaxBatch } from "@/lib/remax-import";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 240;
+const SYNC_BATCH_SIZE = 48;
+const PHONE_CONCURRENCY = 8;
 
 const DIRECTORIES = [
   "https://www.remax.mn/ProfileSearch?countryId=119&country=Mongolia&searchType=agent",
@@ -20,7 +22,7 @@ async function fetchPublicAgentPhone(profileUrl: string): Promise<string | null>
     if (!["www.remax.mn", "remax.mn"].includes(url.hostname)) return null;
     const response = await fetch(url, {
       headers: { ...headers, Accept: "text/html,application/xhtml+xml" },
-      signal: AbortSignal.timeout(12000), cache: "no-store", redirect: "follow"
+      signal: AbortSignal.timeout(7000), cache: "no-store", redirect: "follow"
     });
     if (!response.ok) return null;
     const html = await response.text();
@@ -72,14 +74,14 @@ async function runRemaxImport() {
 
     const visitedSitemaps = new Set<string>();
     const sitemapCards = new Map<string, { fullName: string; profileUrl: string }>();
-    while (sitemapQueue.length && visitedSitemaps.size < 15 && sitemapCards.size < 5000) {
+    while (sitemapQueue.length && visitedSitemaps.size < 8 && sitemapCards.size < 5000) {
       const sitemapUrl = sitemapQueue.shift()!;
       if (visitedSitemaps.has(sitemapUrl)) continue;
       visitedSitemaps.add(sitemapUrl);
       try {
         const response = await fetch(sitemapUrl, {
           headers: { ...headers, "Accept": "application/xml,text/xml,text/plain,*/*" },
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(8000),
           cache: "no-store",
           redirect: "follow"
         });
@@ -104,24 +106,99 @@ async function runRemaxImport() {
       } catch (error) {
         diagnostics.push(`sitemap ${new URL(sitemapUrl).pathname}: ${error instanceof Error ? error.message : "fetch failed"}`);
       }
-      await sleep(250);
+      await sleep(100);
     }
 
-    for (const agent of sitemapCards.values()) {
-      const phone = await fetchPublicAgentPhone(agent.profileUrl);
-      if (phone) phoneNumbersFound++;
-      const result = await pool.query(
-        `insert into agents(full_name, profile_url, source_url, phone_e164, source_checked_at)
-         values($1,$2,$2,$3,now())
-         on conflict(profile_url) do update set
-           full_name=excluded.full_name, source_url=excluded.source_url,
-           phone_e164=coalesce(excluded.phone_e164, agents.phone_e164), source_checked_at=now()
-         returning (xmax = 0) as inserted`,
-        [agent.fullName, agent.profileUrl, phone]
-      );
-      if (result.rows[0]?.inserted) imported++; else updated++;
-      seenOnRun.add(agent.profileUrl);
-      await sleep(250);
+    // Keep a persistent cursor: large agent directories are synced in small,
+    // retryable batches instead of one request that times out after several minutes.
+    await pool.query(`create table if not exists remax_sync_state (
+      id integer primary key check (id = 1),
+      cursor integer not null default 0,
+      total_found integer not null default 0,
+      updated_at timestamptz not null default now()
+    )`);
+    await pool.query("insert into remax_sync_state(id,cursor,total_found) values(1,0,0) on conflict(id) do nothing");
+    const stateResult = await pool.query("select cursor from remax_sync_state where id=1");
+    let syncCursor = Number(stateResult.rows[0]?.cursor || 0);
+    let allProfiles = [...sitemapCards.values()];
+    let selectedDirectory = "";
+    if (allProfiles.length > 0) {
+      selectedDirectory = "https://www.remax.mn/sitemap.xml (public sitemap discovery)";
+    } else {
+      for (const directory of DIRECTORIES) {
+        let sourceFound = 0;
+        for (let page = 1; page <= 5; page++) {
+          const url = new URL(directory);
+          if (page > 1) url.searchParams.set("page", String(page));
+          const response = await fetch(url, {
+            headers, signal: AbortSignal.timeout(10000), cache: "no-store", redirect: "follow"
+          });
+          pagesScanned++;
+          if (!response.ok) {
+            diagnostics.push(`${url.pathname}: HTTP ${response.status}`);
+            break;
+          }
+          const html = await response.text();
+          if (html.length > 8_000_000) break;
+          if (/cf-chl-|challenge-platform|just a moment\.\.\./i.test(html) && html.length < 500_000) break;
+          const cards = parseRemaxAgentCards(html);
+          for (const card of cards) {
+            if (!sitemapCards.has(card.profileUrl)) sitemapCards.set(card.profileUrl, card);
+          }
+          sourceFound += cards.length;
+          if (cards.length === 0) break;
+          await sleep(150);
+        }
+        if (sourceFound > 0) {
+          selectedDirectory = directory;
+          allProfiles = [...sitemapCards.values()];
+          break;
+        }
+        diagnostics.push(`${new URL(directory).pathname}: no public agent profile links found`);
+      }
+    }
+
+    if (allProfiles.length > 0) {
+      if (syncCursor >= allProfiles.length) syncCursor = 0;
+      const batch = selectRemaxBatch(allProfiles, syncCursor, SYNC_BATCH_SIZE);
+      const phones = new Array<string | null>(batch.items.length).fill(null);
+      let nextIndex = 0;
+      const workers = Array.from({ length: Math.min(PHONE_CONCURRENCY, batch.items.length) }, async () => {
+        while (true) {
+          const index = nextIndex++;
+          if (index >= batch.items.length) return;
+          phones[index] = await fetchPublicAgentPhone(batch.items[index].profileUrl);
+        }
+      });
+      await Promise.all(workers);
+      for (let i = 0; i < batch.items.length; i++) {
+        const agent = batch.items[i];
+        const phone = phones[i];
+        if (phone) phoneNumbersFound++;
+        const result = await pool.query(
+          `insert into agents(full_name, profile_url, source_url, phone_e164, source_checked_at)
+           values($1,$2,$2,$3,now())
+           on conflict(profile_url) do update set
+             full_name=excluded.full_name, source_url=excluded.source_url,
+             phone_e164=coalesce(excluded.phone_e164, agents.phone_e164), source_checked_at=now()
+           returning (xmax = 0) as inserted`,
+          [agent.fullName, agent.profileUrl, phone]
+        );
+        if (result.rows[0]?.inserted) imported++; else updated++;
+        seenOnRun.add(agent.profileUrl);
+      }
+      syncCursor = batch.nextOffset;
+      await pool.query("update remax_sync_state set cursor=$1,total_found=$2,updated_at=now() where id=1", [syncCursor, allProfiles.length]);
+      return NextResponse.json({
+        success: true, imported, updated, totalFound: allProfiles.length,
+        processedThisRun: batch.items.length, phoneNumbersFound, pagesScanned,
+        remaining: syncCursor === 0 ? 0 : allProfiles.length - syncCursor,
+        complete: batch.done,
+        directory: selectedDirectory,
+        note: batch.done
+          ? "Нээлттэй профайлуудын синк дууслаа. Зөвхөн нийтэд ил харагдах утасны дугаар импортолсон."
+          : "Синкийг таслахгүйн тулд хэсэгчлэн боловсрууллаа. Үлдсэн профайлыг дараагийн синкээр үргэлжлүүлнэ. Зөвхөн нийтэд ил харагдах утас импортолно."
+      });
     }
 
     if (seenOnRun.size === 0) {
