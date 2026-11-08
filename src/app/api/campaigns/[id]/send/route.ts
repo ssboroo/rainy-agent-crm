@@ -12,11 +12,10 @@ export async function POST(_req:Request,{params}:{params:Promise<{id:string}>}){
   if(campaign.channel==="telegram"&&!process.env.TELEGRAM_BOT_TOKEN)return NextResponse.json({error:"TELEGRAM_BOT_TOKEN тохируулаагүй."},{status:503});
   const recipients=await pool.query("select a.id,a.phone_e164,a.telegram_chat_id,a.opt_out_token from agents a where exists(select 1 from consents c where c.agent_id=a.id and c.channel=$1 and c.revoked_at is null and c.purpose<>'' and c.evidence_ref<>'') and not exists(select 1 from opt_outs o where o.agent_id=a.id and o.channel=$1) and not exists(select 1 from message_logs m where m.campaign_id=$2 and m.agent_id=a.id and m.channel=$1 and m.status in ('sent','queued')) and ($1<>'sms' or a.phone_e164 is not null) and ($1<>'telegram' or a.telegram_chat_id is not null)",[campaign.channel,id]);
   if(!recipients.rowCount)return NextResponse.json({error:"Илгээх сувгийн идэвхтэй зөвшөөрөлтэй шинэ хүлээн авагч олдсонгүй."},{status:409});
-  await pool.query("update campaigns set status='sending' where id=$1",[id]);let sent=0,failed=0,skipped=0;
-  for(const r of recipients.rows){try{
+  const locked=await pool.query("update campaigns set status='sending' where id=$1 and status in ('draft','failed') returning id",[id]);if(!locked.rowCount)return NextResponse.json({error:"Кампанит ажил аль хэдийн эхэлсэн эсвэл дууссан байна."},{status:409});let sent=0,failed=0,skipped=0;
+  for(const r of recipients.rows){if(campaign.channel==="sms"&&!smsCanIncludeUnsubscribe(r.phone_e164)){skipped++;await pool.query("insert into message_logs(campaign_id,agent_id,channel,status,error_text) values($1,$2,'sms','skipped','Carrier does not preserve unsubscribe links')",[id,r.id]);continue;}try{
    let providerId="";
    if(campaign.channel==="sms"){
-    if(!smsCanIncludeUnsubscribe(r.phone_e164)){skipped++;throw new Error("Операторын дугаарт unsubscribe холбоос найдвартай хүрэхгүй тул илгээлтийг алгасав.");}
     const base=process.env.APP_BASE_URL||"https://rainy-agent-crm-production.up.railway.app";
     const text=campaign.message+"\nSMS авахгүй бол: "+base+"/api/optout/"+r.opt_out_token;
     if(!smsWithinProviderLimit(text))throw new Error("SMS 4 хэсгийн WeSend хязгаараас хэтэрсэн.");
