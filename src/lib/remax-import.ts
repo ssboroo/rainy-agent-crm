@@ -24,7 +24,7 @@ function normalizeProfile(href: string): { profileUrl: string; path: string } | 
     const valid = /^\/agent\/\d{6,}\/?$/i.test(path)
       || /^\/[a-z]{2}(?:-[a-z]{2})?\/(?:agents|агентууд)\/.+\/\d{6,}\/?$/i.test(path)
       || /^\/\d{6,}-\d{1,6}\/?$/.test(path)
-      || /^\/[a-z0-9][a-z0-9-]{1,}\/\d{6,}\/?$/i.test(path)
+      || /^\/(?!agent(?:\/|$)|office(?:\/|$)|team(?:\/|$)|profile(?:\/|$))[a-z0-9][a-z0-9-]{1,}\/\d{6,}\/?$/i.test(path)
       || legacyAspx;
     if (!valid) return null;
     if (legacyAspx) path = "/agent/" + queryId;
