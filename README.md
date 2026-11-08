@@ -1,42 +1,42 @@
 # RAINY Agent CRM
 
-Consent-first CRM for publicly sourced real-estate agent directory records and permission-based SMS / Telegram outreach for RAINY FB Pro.
+Монгол хэл дээрх агентын CRM. Railway + PostgreSQL дээр ажиллана.
 
-## Stack
-- Next.js 15 + TypeScript
-- Supabase PostgreSQL
-- Railway deployment
-- WeSend SMS and Telegram Bot API adapters planned
+## Одоогийн боломжууд
+- Админ нэвтрэлт (httpOnly, signed session cookie)
+- PostgreSQL дээр агент, контакт, сувгийн зөвшөөрөл, кампанит ажлын ноорог хадгалах
+- Агент нэмэх, хайх, жагсаах
+- Эх сурвалжийн URL заавал бүртгэх
+- SMS / Telegram зөвшөөрлийг тусад нь хадгалах, нотолгоогүй зөвшөөрөл үүсгэхийг хориглох
+- Кампанит ажлыг ноорог байдлаар хадгалах
+- Системийн health endpoint: `/api/health`
 
-## Safety model
-- Publicly listed contact details are source data, not marketing consent.
-- SMS campaigns require explicit, channel-specific consent.
-- Telegram messages can only be sent to users who initiated the bot.
-- Opt-outs are enforced before every campaign send.
-- Do not use phone-number discovery, contact syncing, or unsolicited bulk messaging.
-- Respect RE/MAX site terms and applicable Mongolian privacy/communications rules before collecting or using directory data.
+## Илгээлтийн хамгаалалт
+- Нийтийн профайл дахь утасны дугаар нь сурталчилгааны зөвшөөрөл биш.
+- SMS илгээлт зөвхөн тухайн сувгийн нотолгоотой opt-in бүртгэлтэй хэрэглэгчдэд боломжтой байх ёстой.
+- Telegram Bot API нь утасны дугаараар хэрэглэгчид эхэлж мессеж бичих боломж олгодоггүй. Хэрэглэгч ботод өөрөө `/start` хийж chat ID үүсгэсэн байх шаардлагатай.
+- Бодит SMS / Telegram provider холболт хийгдээгүй тул илгээлт одоогоор зориудаар хаалттай. Кампанит ажил зөвхөн draft хэлбэрээр хадгалагдана.
+- Opt-out болон Монгол Улсын холбогдох хууль, REMAX.mn сайтын нөхцөлийг мөрдөнө.
 
-## Local setup
-1. Install Node.js 20+.
+## Railway environment variables
+- `DATABASE_URL` — Railway Postgres service reference
+- `ADMIN_PASSWORD` — админ нэвтрэх нууц үг
+- `SESSION_SECRET` — session HMAC түлхүүр
+
+## Local development
+1. Node.js 20+
 2. `npm install`
-3. Copy `.env.example` to `.env.local` and fill Supabase values.
-4. Apply `supabase/migrations/0001_initial.sql` in Supabase SQL Editor.
-5. `npm run dev`
+3. Environment variables тохируулна.
+4. `npm run dev`
 
 ## Tests
 `npm test`
 
-## Current MVP
-- Mongolian-language CRM dashboard shell
-- Mongolian phone normalization utility
-- Channel-specific consent gate
-- Campaign recipient eligibility filter
-- Initial Supabase schema
+## Дараагийн интеграц
+- CSV import/export ба duplicate resolution
+- WeSend API credentials + delivery callback
+- Telegram webhook + bot deep-link onboarding
+- Campaign recipient preview, queue, rate limits, per-channel opt-out
+- Admin user management, audit log, backup/retention policy
 
-## Not yet connected
-- Authenticated admin CRUD, reviewed source import, campaign queue, provider delivery webhooks and analytics
-- WeSend live API credentials and verified provider contract
-- Telegram webhook and bot onboarding
-
-## Secrets
-Never commit `.env.local`, SMS API keys, Telegram bot tokens, or Supabase service-role keys.
+Secrets-ийг GitHub-д commit хийж болохгүй.
