@@ -124,6 +124,7 @@ async function runRemaxImport() {
       await sleep(250);
     }
 
+    if (seenOnRun.size === 0) {
     for (const directory of DIRECTORIES) {
       let sourceFound = 0;
       let emptyPages = 0;
@@ -182,6 +183,7 @@ async function runRemaxImport() {
       }
       diagnostics.push(`${new URL(directory).pathname}: no public agent profile links found`);
     }
+    }
 
     if (seenOnRun.size === 0) {
       return NextResponse.json({
@@ -213,16 +215,6 @@ async function runRemaxImport() {
 export async function POST() {
   if (!await isAuthenticated()) {
     return NextResponse.json({ error: "Нэвтэрнэ үү." }, { status: 401 });
-  }
-  return runRemaxImport();
-}
-
-// One-time operational trigger; disable by clearing REMAX_SYNC_TRIGGER_TOKEN.
-export async function GET(request: Request) {
-  const expected = process.env.REMAX_SYNC_TRIGGER_TOKEN || "";
-  const supplied = new URL(request.url).searchParams.get("token") || "";
-  if (!expected || supplied.length !== expected.length || supplied !== expected) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return runRemaxImport();
 }
