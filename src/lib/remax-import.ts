@@ -45,17 +45,16 @@ function nameFromProfilePath(path: string): string {
  * Script payloads, hidden elements and hidden/reveal metadata are deliberately excluded.
  */
 export function parseRemaxPublicPhone(html: string): string | null {
-  const visible = html
+  const visibleMarkup = html
     .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<[^>]*(?:\bhidden\b|aria-hidden\s*=\s*["']true["']|style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden)[^"']*["'])[^>]*>[\s\S]*?<\/[^>]+>/gi, " ")
+    .replace(/<[^>]*(?:\bhidden\b|aria-hidden\s*=\s*["']true["']|style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden)[^"']*["'])[^>]*>[\s\S]*?<\/[^>]+>/gi, " ");
+  const visible = visibleMarkup
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/&amp;/gi, "&");
-
-  const tel = [...html.matchAll(/<a\b[^>]*href\s*=\s*["']tel:([^"']+)["'][^>]*>/gi)]
+  const tel = [...visibleMarkup.matchAll(/<a\b[^>]*href\s*=\s*["']tel:([^"']+)["'][^>]*>/gi)]
     .map(match => match[1]);
-  const candidates = [...tel, visible];
-  for (const candidate of candidates) {
+  for (const candidate of [...tel, visible]) {
     const matches = candidate.matchAll(/(?:\+?976[\s().-]*)?([6-9](?:[\s().-]*\d){7})(?!\d)/g);
     for (const match of matches) {
       const local = match[1].replace(/\D/g, "");
