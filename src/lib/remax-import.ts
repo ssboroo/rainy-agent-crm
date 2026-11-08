@@ -109,3 +109,14 @@ export function parseSitemapLocations(xml: string): string[] {
       }
     });
 }
+
+
+/** Select a bounded, rotating batch so large public directories can sync across requests. */
+export function selectRemaxBatch<T>(items: T[], offset: number, batchSize: number): { items: T[]; nextOffset: number; done: boolean } {
+  if (items.length === 0) return { items: [], nextOffset: 0, done: true };
+  const start = Math.min(Math.max(0, Math.floor(offset)), items.length);
+  const size = Math.max(1, Math.floor(batchSize));
+  const selected = items.slice(start, start + size);
+  const nextOffset = start + selected.length >= items.length ? 0 : start + selected.length;
+  return { items: selected, nextOffset, done: nextOffset === 0 };
+}
