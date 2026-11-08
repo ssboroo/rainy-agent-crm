@@ -20,8 +20,7 @@ export function parseRemaxAgentCards(html: string): RemaxAgentCard[] {
   for (const match of html.matchAll(anchor)) {
     const href = (match[2] || match[3] || match[4] || "").replace(/&amp;/gi, "&").trim();
     if (!/^https?:\/\/(?:www\.)?remax\.mn\//i.test(href) && !href.startsWith("/")) continue;
-    const absolute = new URL(href, "https://www.remax.mn").toString();
-    const parsed = new URL(absolute);
+    const parsed = new URL(href, "https://www.remax.mn");
     if (parsed.hostname !== "www.remax.mn" && parsed.hostname !== "remax.mn") continue;
     let path = parsed.pathname;
     try { path = decodeURIComponent(path); } catch { /* keep the encoded path if malformed */ }
@@ -31,7 +30,8 @@ export function parseRemaxAgentCards(html: string): RemaxAgentCard[] {
     if (!isLegacyAgent && !isLocalizedAgent && !isNumericProfile) continue;
     const fullName = decodeHtml(match[6] || "");
     if (!fullName || fullName.length > 120 || /^(agent|агент|profile)$/i.test(fullName)) continue;
-    found.set(absolute, { fullName, profileUrl: absolute });
+    const profileUrl = parsed.origin + path;
+    found.set(profileUrl, { fullName, profileUrl });
   }
   return [...found.values()];
 }
