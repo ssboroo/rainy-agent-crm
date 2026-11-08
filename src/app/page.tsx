@@ -12,6 +12,7 @@ export default function Home(){
  const [campaign,setCampaign]=useState({name:"",channel:"sms",message:"RAINY FB Pro ашиглан Facebook группүүдэд постоо нэг дор хуваарьтай нийтлээрэй. Дэлгэрэнгүй: https://workspace.rainy.studio/"});
  const api=useCallback(async(path:string,init?:RequestInit)=>{const r=await fetch(path,{...init,headers:{"Content-Type":"application/json",...(init?.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Хүсэлт амжилтгүй");return d;},[]);
  const refresh=useCallback(async()=>{const [o,a,c,m]=await Promise.all([api("/api/overview"),api("/api/agents"),api("/api/campaigns"),api("/api/messages")]);setStats(o);setAgents(a.agents);setCampaigns(c.campaigns);setMessages(m.messages);},[api]);
+ useEffect(()=>{api("/api/auth/session").then(s=>{if(s.authenticated)setLogged(true);}).catch(()=>{});},[api]);
  useEffect(()=>{if(logged)refresh().catch(e=>setError(e.message));},[logged,refresh]);
  const filtered=useMemo(()=>agents.filter(a=>[a.full_name,a.office_name,a.phone_e164].join(" ").toLowerCase().includes(query.toLowerCase())),[agents,query]);
  async function login(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try{await api("/api/auth/login",{method:"POST",body:JSON.stringify({password})});setLogged(true);setPassword("");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
