@@ -15,7 +15,7 @@ function decodeHtml(value: string): string {
 
 function normalizeProfile(href: string): URL | null {
   try {
-    const url = new URL(href.replace(/\\//g, "/"), "https://www.remax.mn");
+    const url = new URL(href, "https://www.remax.mn");
     if (url.hostname !== "www.remax.mn" && url.hostname !== "remax.mn") return null;
     let path = url.pathname;
     try { path = decodeURIComponent(path); } catch { /* retain encoded path */ }
