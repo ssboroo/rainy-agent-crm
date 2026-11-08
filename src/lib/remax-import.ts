@@ -46,19 +46,19 @@ function nameFromProfilePath(path: string): string {
  */
 export function parseRemaxPublicPhone(html: string): string | null {
   const visible = html
-    .replace(/<(script|style|noscript|template)\\b[^>]*>[\\s\\S]*?<\\/\\1>/gi, " ")
-    .replace(/<[^>]*(?:\\bhidden\\b|aria-hidden\\s*=\\s*["']true["']|style\\s*=\\s*["'][^"']*(?:display\\s*:\\s*none|visibility\\s*:\\s*hidden)[^"']*["'])[^>]*>[\\s\\S]*?<\\/[^>]+>/gi, " ")
+    .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]*(?:\bhidden\b|aria-hidden\s*=\s*["']true["']|style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden)[^"']*["'])[^>]*>[\s\S]*?<\/[^>]+>/gi, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/&amp;/gi, "&");
 
-  const tel = [...html.matchAll(/<a\\b[^>]*href\\s*=\\s*["']tel:([^"']+)["'][^>]*>/gi)]
+  const tel = [...html.matchAll(/<a\b[^>]*href\s*=\s*["']tel:([^"']+)["'][^>]*>/gi)]
     .map(match => match[1]);
   const candidates = [...tel, visible];
   for (const candidate of candidates) {
-    const matches = candidate.matchAll(/(?:\\+?976[\\s().-]*)?([6-9](?:[\\s().-]*\\d){7})(?!\\d)/g);
+    const matches = candidate.matchAll(/(?:\+?976[\s().-]*)?([6-9](?:[\s().-]*\d){7})(?!\d)/g);
     for (const match of matches) {
-      const local = match[1].replace(/\\D/g, "");
+      const local = match[1].replace(/\D/g, "");
       if (local.length === 8) return "+976" + local;
     }
   }
