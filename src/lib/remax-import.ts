@@ -23,7 +23,8 @@ export function parseRemaxAgentCards(html: string): RemaxAgentCard[] {
     const absolute = new URL(href, "https://www.remax.mn").toString();
     const parsed = new URL(absolute);
     if (parsed.hostname !== "www.remax.mn" && parsed.hostname !== "remax.mn") continue;
-    const path = parsed.pathname;
+    let path = parsed.pathname;
+    try { path = decodeURIComponent(path); } catch { /* keep the encoded path if malformed */ }
     const isLegacyAgent = /^\/agent\/\d{6,}\/?$/i.test(path);
     const isLocalizedAgent = /^\/[a-z]{2}(?:-[a-z]{2})?\/(?:agents|агентууд)\/.+\/\d{6,}\/?$/i.test(path);
     const isNumericProfile = /^\/\d{6,}-\d{1,6}\/?$/.test(path);
