@@ -19,10 +19,15 @@ export function parseRemaxAgentCards(html: string): RemaxAgentCard[] {
   const anchor = /<a\b([^>]*?)href\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))([^>]*)>([\s\S]*?)<\/a>/gi;
   for (const match of html.matchAll(anchor)) {
     const href = (match[2] || match[3] || match[4] || "").replace(/&amp;/gi, "&").trim();
-    if (!/^https?:\/\/(?:www\.)?remax\.mn\//i.test(href) && !/^\/(?:agent\/|[a-z]{2}\/agents\/)/i.test(href)) continue;
+    if (!/^https?:\/\/(?:www\.)?remax\.mn\//i.test(href) && !href.startsWith("/")) continue;
     const absolute = new URL(href, "https://www.remax.mn").toString();
-    const path = new URL(absolute).pathname;
-    if (!/^\/agent\/\d{6,}\/?$/i.test(path) && !/^\/[a-z]{2}\/agents\/.+\/\d{6,}\/?$/i.test(path)) continue;
+    const parsed = new URL(absolute);
+    if (parsed.hostname !== "www.remax.mn" && parsed.hostname !== "remax.mn") continue;
+    const path = parsed.pathname;
+    const isLegacyAgent = /^\/agent\/\d{6,}\/?$/i.test(path);
+    const isLocalizedAgent = /^\/[a-z]{2}(?:-[a-z]{2})?\/(?:agents|агентууд)\/.+\/\d{6,}\/?$/i.test(path);
+    const isNumericProfile = /^\/\d{6,}-\d{1,6}\/?$/.test(path);
+    if (!isLegacyAgent && !isLocalizedAgent && !isNumericProfile) continue;
     const fullName = decodeHtml(match[6] || "");
     if (!fullName || fullName.length > 120 || /^(agent|агент|profile)$/i.test(fullName)) continue;
     found.set(absolute, { fullName, profileUrl: absolute });
