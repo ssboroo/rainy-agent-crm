@@ -62,7 +62,7 @@ export function parseRemaxAgentCards(html: string): RemaxAgentCard[] {
 /** Extract public agent profile links from XML sitemap/urlset documents. */
 export function parseRemaxSitemap(xml: string): RemaxAgentCard[] {
   const found = new Map<string, RemaxAgentCard>();
-  for (const match of xml.matchAll(/<loc\\b[^>]*>([\\s\\S]*?)<\\/loc>/gi)) {
+  for (const match of xml.matchAll(/<loc\b[^>]*>([\s\S]*?)<\/loc>/gi)) {
     const href = decodeHtml(match[1]).trim();
     const profile = normalizeProfile(href);
     if (!profile) continue;
@@ -75,7 +75,7 @@ export function parseRemaxSitemap(xml: string): RemaxAgentCard[] {
 
 /** Read sitemap index locations so the importer can follow nested public sitemaps. */
 export function parseSitemapLocations(xml: string): string[] {
-  return [...xml.matchAll(/<loc\\b[^>]*>([\\s\\S]*?)<\\/loc>/gi)]
+  return [...xml.matchAll(/<loc\b[^>]*>([\s\S]*?)<\/loc>/gi)]
     .map(match => decodeHtml(match[1]).trim())
     .filter(value => {
       try {
