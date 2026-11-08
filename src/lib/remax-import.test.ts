@@ -41,7 +41,7 @@ describe("parseRemaxPublicPhone", () => {
     expect(parseRemaxPublicPhone('<a href="tel:+976-8811-2233">+976 8811 2233</a>')).toBe("+97688112233");
   });
   it("does not collect numbers found only in scripts or hidden elements", () => {
-    expect(parseRemaxPublicPhone('<script>window.phone="99112233"</script><div hidden>88112233</div><span>Профайл</span>')).toBeNull();
+    expect(parseRemaxPublicPhone('<script>window.phone="99112233"</script><div hidden><a href="tel:88112233">Call</a>88112233</div><span>Профайл</span>')).toBeNull();
   });
   it("returns null when no public phone number is present", () => {
     expect(parseRemaxPublicPhone('<main><p>Агентын профайл</p></main>')).toBeNull();
