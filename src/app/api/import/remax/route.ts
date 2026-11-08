@@ -121,7 +121,6 @@ async function runRemaxImport() {
     const stateResult = await pool.query("select cursor from remax_sync_state where id=1");
     let syncCursor = Number(stateResult.rows[0]?.cursor || 0);
     let allProfiles = [...sitemapCards.values()];
-    let selectedDirectory = "";
     if (allProfiles.length > 0) {
       selectedDirectory = "https://www.remax.mn/sitemap.xml (public sitemap discovery)";
     } else {
@@ -199,67 +198,6 @@ async function runRemaxImport() {
           ? "Нээлттэй профайлуудын синк дууслаа. Зөвхөн нийтэд ил харагдах утасны дугаар импортолсон."
           : "Синкийг таслахгүйн тулд хэсэгчлэн боловсрууллаа. Үлдсэн профайлыг дараагийн синкээр үргэлжлүүлнэ. Зөвхөн нийтэд ил харагдах утас импортолно."
       });
-    }
-
-    if (seenOnRun.size === 0) {
-    for (const directory of DIRECTORIES) {
-      let sourceFound = 0;
-      let emptyPages = 0;
-      for (let page = 1; page <= 40; page++) {
-        const url = new URL(directory);
-        if (page > 1) url.searchParams.set("page", String(page));
-        const response = await fetch(url, {
-          headers,
-          signal: AbortSignal.timeout(20000),
-          cache: "no-store",
-          redirect: "follow"
-        });
-        pagesScanned++;
-        if (!response.ok) {
-          diagnostics.push(`${url.pathname}: HTTP ${response.status}`);
-          break;
-        }
-        const html = await response.text();
-        if (html.length > 8_000_000) {
-          diagnostics.push(`${url.pathname}: response too large`);
-          break;
-        }
-        if (/cf-chl-|challenge-platform|just a moment\.\.\./i.test(html) && html.length < 500_000) {
-          diagnostics.push(`${url.pathname}: anti-bot challenge response`);
-          break;
-        }
-
-        const cards = parseRemaxAgentCards(html);
-        let pageFound = 0;
-        for (const agent of cards) {
-          if (seenOnRun.has(agent.profileUrl)) continue;
-          seenOnRun.add(agent.profileUrl);
-          const phone = await fetchPublicAgentPhone(agent.profileUrl);
-          if (phone) phoneNumbersFound++;
-          const result = await pool.query(
-            `insert into agents(full_name, profile_url, source_url, phone_e164, source_checked_at)
-             values($1,$2,$2,$3,now())
-             on conflict(profile_url) do update set
-               full_name=excluded.full_name, source_url=excluded.source_url,
-               phone_e164=coalesce(excluded.phone_e164, agents.phone_e164), source_checked_at=now()
-             returning (xmax = 0) as inserted`,
-            [agent.fullName, agent.profileUrl, phone]
-          );
-          if (result.rows[0]?.inserted) imported++; else updated++;
-          pageFound++;
-          await sleep(250);
-        }
-        sourceFound += pageFound;
-        if (pageFound === 0) emptyPages++; else emptyPages = 0;
-        if (emptyPages >= 2 || (page > 1 && cards.length === 0)) break;
-        await sleep(600);
-      }
-      if (sourceFound > 0) {
-        selectedDirectory = directory;
-        break;
-      }
-      diagnostics.push(`${new URL(directory).pathname}: no public agent profile links found`);
-    }
     }
 
     if (seenOnRun.size === 0) {
