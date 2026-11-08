@@ -41,7 +41,31 @@ function nameFromProfilePath(path: string): string {
   return slug.split("-").map(word => word ? word[0].toUpperCase() + word.slice(1) : "").join(" ");
 }
 
-/** Extract only public agent display names and canonical profile URLs. No phone/email scraping. */
+/** Extract a Mongolian contact number only when it is present in rendered, visible profile markup.
+ * Script payloads, hidden elements and hidden/reveal metadata are deliberately excluded.
+ */
+export function parseRemaxPublicPhone(html: string): string | null {
+  const visible = html
+    .replace(/<(script|style|noscript|template)\\b[^>]*>[\\s\\S]*?<\\/\\1>/gi, " ")
+    .replace(/<[^>]*(?:\\bhidden\\b|aria-hidden\\s*=\\s*["']true["']|style\\s*=\\s*["'][^"']*(?:display\\s*:\\s*none|visibility\\s*:\\s*hidden)[^"']*["'])[^>]*>[\\s\\S]*?<\\/[^>]+>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&");
+
+  const tel = [...html.matchAll(/<a\\b[^>]*href\\s*=\\s*["']tel:([^"']+)["'][^>]*>/gi)]
+    .map(match => match[1]);
+  const candidates = [...tel, visible];
+  for (const candidate of candidates) {
+    const matches = candidate.matchAll(/(?:\\+?976[\\s().-]*)?([6-9](?:[\\s().-]*\\d){7})(?!\\d)/g);
+    for (const match of matches) {
+      const local = match[1].replace(/\\D/g, "");
+      if (local.length === 8) return "+976" + local;
+    }
+  }
+  return null;
+}
+
+/** Extract public agent display names and canonical profile URLs. */
 export function parseRemaxAgentCards(html: string): RemaxAgentCard[] {
   const found = new Map<string, RemaxAgentCard>();
   const anchor = /<a\b([^>]*?)href\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))([^>]*)>([\s\S]*?)<\/a>/gi;
