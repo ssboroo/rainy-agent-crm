@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
 import { ensureSchema, pool } from "@/lib/server-db";
-import { parseRemaxAgentCards, parseRemaxSitemap, parseSitemapLocations } from "@/lib/remax-import";
+import { parseRemaxAgentCards, parseRemaxSitemap, parseSitemapLocations, parseRemaxPublicPhone } from "@/lib/remax-import";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -13,6 +13,23 @@ const DIRECTORIES = [
   "https://www.remax.mn/ProfileSearch?countryId=119&searchType=agent"
 ];
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchPublicAgentPhone(profileUrl: string): Promise<string | null> {
+  try {
+    const url = new URL(profileUrl);
+    if (!["www.remax.mn", "remax.mn"].includes(url.hostname)) return null;
+    const response = await fetch(url, {
+      headers: { ...headers, Accept: "text/html,application/xhtml+xml" },
+      signal: AbortSignal.timeout(12000), cache: "no-store", redirect: "follow"
+    });
+    if (!response.ok) return null;
+    const html = await response.text();
+    if (html.length > 3_000_000 || /cf-chl-|challenge-platform|just a moment\.\.\./i.test(html)) return null;
+    return parseRemaxPublicPhone(html);
+  } catch {
+    return null;
+  }
+}
 const headers = {
   "User-Agent": "Mozilla/5.0 (compatible; RAINY-Agent-CRM/1.0; +https://rainy.studio)",
   "Accept": "text/html,application/xhtml+xml"
@@ -24,6 +41,7 @@ async function runRemaxImport() {
     let imported = 0;
     let updated = 0;
     let pagesScanned = 0;
+    let phoneNumbersFound = 0;
     let selectedDirectory = "";
     const seenOnRun = new Set<string>();
     const diagnostics: string[] = [];
@@ -90,27 +108,20 @@ async function runRemaxImport() {
     }
 
     for (const agent of sitemapCards.values()) {
+      const phone = await fetchPublicAgentPhone(agent.profileUrl);
+      if (phone) phoneNumbersFound++;
       const result = await pool.query(
-        `insert into agents(full_name, profile_url, source_url, source_checked_at)
-         values($1,$2,$2,now())
+        `insert into agents(full_name, profile_url, source_url, phone_e164, source_checked_at)
+         values($1,$2,$2,$3,now())
          on conflict(profile_url) do update set
-           full_name=excluded.full_name, source_url=excluded.source_url, source_checked_at=now()
+           full_name=excluded.full_name, source_url=excluded.source_url,
+           phone_e164=coalesce(excluded.phone_e164, agents.phone_e164), source_checked_at=now()
          returning (xmax = 0) as inserted`,
-        [agent.fullName, agent.profileUrl]
+        [agent.fullName, agent.profileUrl, phone]
       );
       if (result.rows[0]?.inserted) imported++; else updated++;
       seenOnRun.add(agent.profileUrl);
-    }
-    if (seenOnRun.size > 0) {
-      return NextResponse.json({
-        success: true,
-        imported,
-        updated,
-        totalFound: seenOnRun.size,
-        pagesScanned,
-        directory: "https://www.remax.mn/sitemap.xml (public sitemap discovery)",
-        note: "Зөвхөн нийтэд нээлттэй агентын нэр, профайлын холбоос импортолсон. Утас, имэйл болон маркетингийн зөвшөөрөл цуглуулаагүй."
-      });
+      await sleep(250);
     }
 
     for (const directory of DIRECTORIES) {
@@ -145,16 +156,20 @@ async function runRemaxImport() {
         for (const agent of cards) {
           if (seenOnRun.has(agent.profileUrl)) continue;
           seenOnRun.add(agent.profileUrl);
+          const phone = await fetchPublicAgentPhone(agent.profileUrl);
+          if (phone) phoneNumbersFound++;
           const result = await pool.query(
-            `insert into agents(full_name, profile_url, source_url, source_checked_at)
-             values($1,$2,$2,now())
+            `insert into agents(full_name, profile_url, source_url, phone_e164, source_checked_at)
+             values($1,$2,$2,$3,now())
              on conflict(profile_url) do update set
-               full_name=excluded.full_name, source_url=excluded.source_url, source_checked_at=now()
+               full_name=excluded.full_name, source_url=excluded.source_url,
+               phone_e164=coalesce(excluded.phone_e164, agents.phone_e164), source_checked_at=now()
              returning (xmax = 0) as inserted`,
-            [agent.fullName, agent.profileUrl]
+            [agent.fullName, agent.profileUrl, phone]
           );
           if (result.rows[0]?.inserted) imported++; else updated++;
           pageFound++;
+          await sleep(250);
         }
         sourceFound += pageFound;
         if (pageFound === 0) emptyPages++; else emptyPages = 0;
@@ -183,9 +198,10 @@ async function runRemaxImport() {
       imported,
       updated,
       totalFound: seenOnRun.size,
+      phoneNumbersFound,
       pagesScanned,
-      directory: selectedDirectory,
-      note: "Зөвхөн нийтэд нээлттэй агентын нэр, профайлын холбоос импортолсон. Утас, имэйл болон маркетингийн зөвшөөрөл цуглуулаагүй."
+      directory: selectedDirectory || "https://www.remax.mn/sitemap.xml (public sitemap discovery)",
+      note: "Нэр, профайл болон зөвхөн хуудсанд нийтэд харагдаж буй утасны дугаарыг импортолсон. Нууцлагдсан, товшиж ил гардаг, нэвтрэлт шаардсан дугаар болон маркетингийн зөвшөөрөл цуглуулаагүй."
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "RE/MAX импорт амжилтгүй.";
