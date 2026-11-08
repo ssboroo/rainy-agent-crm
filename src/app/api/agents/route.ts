@@ -17,7 +17,7 @@ export async function POST(req:Request){
  if(phone&&!/^\+976\d{8}$/.test(phone))return NextResponse.json({error:"Монгол утасны дугаар 8 оронтой байх ёстой."},{status:400});
  try{await ensureSchema();const linkToken=randomUUID(),optOutToken=randomUUID();const r=await pool.query("insert into agents(full_name,office_name,phone_e164,email,profile_url,source_url,telegram_link_token,opt_out_token) values($1,$2,$3,$4,$5,$6,$7,$8) returning id",[b.fullName.trim(),b.office||null,phone,b.email||null,b.profileUrl||null,b.sourceUrl,linkToken,optOutToken]);const id=r.rows[0].id;
  if(b.consents?.sms===true)await pool.query("insert into consents(agent_id,channel,purpose,source,evidence_ref) values($1,'sms','RAINY FB Pro мэдээлэл хүргэх зөвшөөрөл','Админ бүртгэл',$2)",[id,b.evidence.trim()]);
- const username=process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/,"");const telegramStartUrl=username?"https://t.me/"+username+"?start="+linkToken:null;
+ let username=process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/,"");if(!username&&process.env.TELEGRAM_BOT_TOKEN){const me=await fetch("https://api.telegram.org/bot"+process.env.TELEGRAM_BOT_TOKEN+"/getMe",{cache:"no-store"}).then(x=>x.json()).catch(()=>null);username=me?.result?.username||"";}const telegramStartUrl=username?"https://t.me/"+username+"?start="+linkToken:null;
  return NextResponse.json({id,telegramStartUrl,telegramLinkToken:linkToken},{status:201});
  }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Хадгалах үед алдаа гарлаа."},{status:500});}
 }

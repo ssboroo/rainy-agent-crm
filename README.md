@@ -1,42 +1,47 @@
 # RAINY Agent CRM
-
 Монгол хэл дээрх агентын CRM. Railway + PostgreSQL дээр ажиллана.
 
-## Одоогийн боломжууд
-- Админ нэвтрэлт (httpOnly, signed session cookie)
-- PostgreSQL дээр агент, контакт, сувгийн зөвшөөрөл, кампанит ажлын ноорог хадгалах
-- Агент нэмэх, хайх, жагсаах
-- Эх сурвалжийн URL заавал бүртгэх
-- SMS / Telegram зөвшөөрлийг тусад нь хадгалах, нотолгоогүй зөвшөөрөл үүсгэхийг хориглох
-- Кампанит ажлыг ноорог байдлаар хадгалах
-- Системийн health endpoint: `/api/health`
+## Боломжууд
+- Админ session нэвтрэлт, agent CRUD/search
+- CSV импорт (5,000 мөр хүртэл), CSV экспорт
+- SMS болон Telegram сувгийн тусдаа consent бүртгэл
+- Telegram bot deep-link onboarding, inline consent, /stop opt-out
+- WeSend SMS (нэг бүрийн idempotency key) болон Telegram campaign send
+- SMS unsubscribe холбоос; GET нь зөвхөн баталгаажуулах дэлгэц, POST дарсны дараа opt-out
+- Carrier safety: WeSend нь ONDO/Lime зэрэг зарим сүлжээнд SMS холбоосыг хасдаг тул тэдгээр дугаарт илгээхгүй
+- Campaign logs, health endpoint
 
-## Илгээлтийн хамгаалалт
-- Нийтийн профайл дахь утасны дугаар нь сурталчилгааны зөвшөөрөл биш.
-- SMS илгээлт зөвхөн тухайн сувгийн нотолгоотой opt-in бүртгэлтэй хэрэглэгчдэд боломжтой байх ёстой.
-- Telegram Bot API нь утасны дугаараар хэрэглэгчид эхэлж мессеж бичих боломж олгодоггүй. Хэрэглэгч ботод өөрөө `/start` хийж chat ID үүсгэсэн байх шаардлагатай.
-- Бодит SMS / Telegram provider холболт хийгдээгүй тул илгээлт одоогоор зориудаар хаалттай. Кампанит ажил зөвхөн draft хэлбэрээр хадгалагдана.
-- Opt-out болон Монгол Улсын холбогдох хууль, REMAX.mn сайтын нөхцөлийг мөрдөнө.
+## Environment variables
+- DATABASE_URL — Railway Postgres reference
+- ADMIN_PASSWORD — админ нууц үг
+- SESSION_SECRET — HMAC session secret
+- WESEND_API_KEY — WeSend API key (https://wesend.mn/docs)
+- TELEGRAM_BOT_TOKEN — BotFather token
+- TELEGRAM_WEBHOOK_SECRET — Telegram webhook secret header
+- TELEGRAM_BOT_USERNAME — optional; if omitted, bot username is resolved using getMe
+- APP_BASE_URL — public HTTPS app URL
 
-## Railway environment variables
-- `DATABASE_URL` — Railway Postgres service reference
-- `ADMIN_PASSWORD` — админ нэвтрэх нууц үг
-- `SESSION_SECRET` — session HMAC түлхүүр
+## Telegram setup
+1. BotFather дээр bot үүсгэж token авна.
+2. Railway Variables дээр TELEGRAM_BOT_TOKEN нэмнэ.
+3. Админ самбарын Кампанит ажил хэсгээс "Telegram webhook холбох" дарна.
+4. Агент бүртгэхэд үүсэх Telegram урилгыг тухайн агент руу явуулна.
+5. Агент /start хийж, inline button-оор marketing consent-оо өөрөө зөвшөөрнө. /stop-оор цуцална.
 
-## Local development
-1. Node.js 20+
-2. `npm install`
-3. Environment variables тохируулна.
-4. `npm run dev`
+## SMS setup
+1. WeSend дээр API key үүсгээд Railway Variables дээр WESEND_API_KEY нэмнэ.
+2. Зөвшөөрөл авсан агентын нотолгооны URL/тайлбарыг бүртгэнэ.
+3. SMS илгээлтэд нэг бүрийн idempotency key болон хувь хүний unsubscribe link хавсаргана.
+4. WeSend carrier link-ийг устгадаг ONDO/Lime болон танигдаагүй prefix-үүдийг хамгаалалтын үүднээс алгасана.
 
-## Tests
-`npm test`
+## CSV format
+Required headers: `full_name,source_url`
+Optional: `office_name,phone,email,profile_url`
+Импорт нь зөвшөөрөл импортлохгүй. Opt-in зөвшөөрлийг тусад нь нотолгоотой бүртгэнэ.
 
-## Дараагийн интеграц
-- CSV import/export ба duplicate resolution
-- WeSend API credentials + delivery callback
-- Telegram webhook + bot deep-link onboarding
-- Campaign recipient preview, queue, rate limits, per-channel opt-out
-- Admin user management, audit log, backup/retention policy
+## Commands
+- `npm test`
+- `npm run lint`
+- `npm run build`
 
-Secrets-ийг GitHub-д commit хийж болохгүй.
+Public profile phone numbers do not imply marketing consent. No unsolicited bulk outreach.
